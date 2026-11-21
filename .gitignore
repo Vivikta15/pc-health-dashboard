@@ -1,0 +1,10 @@
+# Generated on your own PC - contains machine names, file paths and usage data. Never commit.
+reports/
+*.log
+*.tmp
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PC Health</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/assets/icon-64.png">
+<link rel="icon" type="image/png" sizes="128x128" href="/assets/icon-128.png">
+<link rel="icon" type="image/png" sizes="256x256" href="/assets/icon-256.png">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<style>
+:root{
+  /* default = "Vitals" look; themes overwrite these from JS */
+  --bg:#121214;--top:#18181b;--card:#1a1a1e;--inset:#111113;--line:#27272d;--fg:#f3f4f7;--mut:#9a9aa6;--dim:#5f5f6b;
+  --tab:#1d1d22;--tabon:#1d3a66;--tabonfg:#7db1ff;
+  --cpu:#3b82f6;--mem:#8f7cf5;--gpu:#ec4899;--disk:#f59e0b;--net:#22c55e;--bat:#22c55e;--npu:#8b5cf6;--hl:#14b8a6;
+  --ok:#34d399;--warn:#fbbf24;--bad:#fb5d6c;
+  --fd:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;--blur:0px;--bgimg:none;--shadow:0 1px 0 rgba(255,255,255,.03) inset;
+  --thr:var(--disk);--snd:var(--gpu);--bt:var(--cpu);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bgimg) center/cover fixed,var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;transition:background-color .3s,color .3s}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid var(--tabonfg);outline-offset:2px;border-radius:10px}
+svg{display:block}.ico{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.num{font-variant-numeric:tabular-nums}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--top);border-bottom:1px solid var(--line);backdrop-filter:blur(var(--blur))}
+.logo{width:32px;height:32px;flex:none;display:block}
+.tabs{display:flex;gap:2px;background:var(--tab);padding:5px;border-radius:16px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:0 1 auto}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:11px;color:var(--mut);font-weight:600;font-size:13.5px;white-space:nowrap;transition:.15s}
+.tabs button:hover{color:var(--fg)}
+.tabs button[aria-selected=true]{background:color-mix(in srgb,var(--tc,var(--tabonfg)) 20%,var(--tab));color:var(--tc,var(--tabonfg))}
+.sp{flex:0 0 0}
+@media (max-width:1560px){.tabs button:not([aria-selected=true]) .l{display:none}.tabs button{padding:8px 11px}}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:99px;background:var(--tab);color:var(--mut);font-size:12.5px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.ib{width:38px;height:38px;border-radius:11px;background:var(--tab);display:grid;place-items:center;color:var(--mut);position:relative}
+.ib:hover{color:var(--fg)}
+.ib.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.themebtn{display:grid;grid-template-columns:repeat(2,8px);gap:4px}
+.themebtn i{width:8px;height:8px;border-radius:50%}
+
+/* layout */
+#view{max-width:1360px;margin:0 auto;padding:16px 18px 40px;display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media (max-width:1100px){.c3{grid-column:span 6}.c4{grid-column:span 6}.c5,.c7,.c8{grid-column:span 12}}
+@media (max-width:700px){.c3,.c4,.c6{grid-column:span 12}}
+
+.card{background:var(--card);border-radius:20px;padding:16px 18px;position:relative;min-width:0;box-shadow:var(--shadow);backdrop-filter:blur(var(--blur));border:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.card header{display:flex;align-items:center;gap:10px}
+.card header b{color:var(--c,var(--fg));font-size:15px;font-weight:650;font-family:var(--fd)}
+.chip{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--c,var(--mut)) 18%,transparent);color:var(--c,var(--mut))}
+.chev{margin-left:auto;color:var(--dim);font-style:normal;font-size:18px}
+.mini{cursor:pointer;transition:transform .15s,border-color .15s}
+.mini:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--c) 45%,transparent)}
+.subt{color:var(--mut);margin-top:12px;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.big{font-family:var(--fd);font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-top:2px;display:flex;align-items:baseline;gap:6px}
+.big small{font-size:18px;font-weight:500;color:var(--mut);letter-spacing:0}
+.badge{margin-left:auto;font-style:normal;font-size:13px;font-weight:600;padding:3px 11px;border-radius:99px;background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok);align-self:center}
+.badge.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}.badge.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.tri{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.tri span{display:block;color:var(--mut);font-size:12.5px}.tri b{font-size:14.5px;font-weight:650;white-space:nowrap}
+.inset{background:var(--inset);border-radius:13px;padding:9px 10px;margin-top:14px}
+.bars{display:block;width:100%;height:44px}
+.bars.tall{height:170px}
+.note{color:var(--dim);font-size:12.5px;padding:6px 2px}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:700;margin:2px 0 8px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.kv:last-child{border-bottom:0}
+.kv span{color:var(--mut)}.kv b{font-weight:650;text-align:right}
+.lg{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:6px 0}
+.lg i{width:9px;height:9px;border-radius:50%}.lg span{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lg b{color:var(--mut);font-weight:500}
+.donutbox{display:flex;align-items:center;gap:16px;margin-top:8px}
+.donut{width:130px;height:130px;flex:none}
+.dn{font:700 17px var(--fd);fill:var(--fg)}.ds{font:500 8.5px "Segoe UI",sans-serif;fill:var(--mut)}
+.legend{flex:1;min-width:0}
+.cores{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:8px;margin-top:10px}
+.core{height:84px;border-radius:8px;background:var(--inset);position:relative;overflow:hidden}
+.core i{position:absolute;left:0;right:0;bottom:0;background:var(--cpu);opacity:.9;border-radius:0 0 8px 8px;transition:height .5s}
+.core em{position:absolute;top:4px;left:0;right:0;text-align:center;font-style:normal;font-size:10px;color:var(--mut)}
+.list .it{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.list .it:last-child{border-bottom:0}
+.list .it .t{font-weight:600}.list .it .d{color:var(--mut);font-size:12.5px}
+.app{display:grid;grid-template-columns:26px 1fr auto auto;gap:10px;align-items:center;padding:7px 0}
+.app img,.app .av{width:24px;height:24px;border-radius:6px;object-fit:contain}
+.app .av{display:grid;place-items:center;background:var(--inset);color:var(--mut);font-weight:700;font-size:11px}
+.app .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app .meter{height:4px;border-radius:9px;background:var(--line);margin-top:5px;overflow:hidden}.app .meter i{display:block;height:100%;background:var(--c,var(--mem));border-radius:9px}
+.app .m{font-weight:600;min-width:62px;text-align:right}.app .c{color:var(--mut);min-width:44px;text-align:right}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;background:var(--tab);font-weight:600;font-size:13px;transition:.15s;border:1px solid var(--line)}
+.btn:hover{border-color:var(--dim)}
+.btn.primary{background:var(--tabonfg);color:var(--bg);border-color:transparent}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}.btn[disabled]{opacity:.5;cursor:default}
+.seg{display:inline-flex;background:var(--inset);border-radius:10px;padding:3px;gap:2px;margin-left:auto}
+.seg button{padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--mut)}.seg button[aria-pressed=true]{background:var(--tab);color:var(--fg)}
+.shield{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;flex:none}
+.shield svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.shield.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}.shield.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}.shield.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.prog{height:6px;border-radius:9px;background:var(--line);overflow:hidden;margin-top:10px;position:relative}
+.prog i{position:absolute;inset:0 auto 0 0;width:35%;border-radius:9px;background:linear-gradient(90deg,transparent,var(--ok),transparent);animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{left:-40%}100%{left:105%}}
+.skel{border-radius:10px;height:120px;background:linear-gradient(90deg,var(--inset),var(--line),var(--inset));background-size:200% 100%;animation:sh 1.4s infinite}@keyframes sh{to{background-position:-200% 0}}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.tile{background:var(--inset);border-radius:13px;padding:11px 13px}.tile span{display:block;color:var(--mut);font-size:12px}.tile b{font-family:var(--fd);font-size:20px}
+.file{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.file:last-child{border-bottom:0}
+.file .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file .pth{color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left}
+.bar{height:8px;border-radius:99px;background:var(--inset);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;border-radius:99px;background:var(--c,var(--disk))}
+.hide{display:none!important}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:2px}
+.crumb{padding:4px 8px;border-radius:8px;color:var(--mut);font-weight:600;font-size:13px}.crumb:hover{background:var(--inset);color:var(--fg)}.crumb:last-of-type{color:var(--fg)}
+.sepc{color:var(--dim);font-style:normal}
+.mrow{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(60px,1fr) 88px auto;gap:12px;align-items:center;padding:9px 6px;border-radius:12px}
+.mrow.dir{cursor:pointer}.mrow.dir:hover{background:var(--inset)}
+.mn{display:flex;gap:10px;align-items:center;min-width:0}.mn b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mn .sm{display:block;color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kind{flex:none;min-width:92px;text-align:center;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:color-mix(in srgb,var(--k) 18%,transparent);color:var(--k)}
+.mb{height:8px;border-radius:99px;background:var(--inset);overflow:hidden}.mb i{display:block;height:100%;border-radius:99px;transition:width .5s}
+.msz{text-align:right}.meas{color:var(--dim);font-weight:500;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.4}}
+.chev2{font-style:normal;color:var(--dim);margin-left:6px}
+.crow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.crow:last-child{border-bottom:0}
+.crow .d{color:var(--mut);font-size:12.5px;margin-top:2px}.crow .d i{font-style:normal;color:var(--dim)}
+.rk{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:8px;vertical-align:1px}
+.rk.safe{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}.rk.recreatable{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}.rk.permanent{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.warnbox{margin-top:10px;padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);font-weight:600;font-size:13px}
+.inp{width:96px;padding:7px 10px;border-radius:9px;background:var(--inset);border:1px solid var(--line);color:var(--fg);font:inherit}
+.kinds{display:flex;gap:6px;flex-wrap:wrap}
+@media (max-width:900px){.mrow{grid-template-columns:minmax(0,1fr) 88px auto}.mb{display:none}}
+
+/* theme popover */
+.pop{position:fixed;top:62px;right:18px;z-index:40;width:min(480px,calc(100vw - 24px));background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:14px;box-shadow:0 24px 60px -10px rgba(0,0,0,.55)}
+.tg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.th{display:flex;flex-direction:column;align-items:center;gap:7px;color:var(--mut);font-size:13px}
+.th .pv{width:100%;aspect-ratio:1.45;border-radius:13px;padding:10px 11px;border:2px solid transparent;display:flex;flex-direction:column;justify-content:space-between;text-align:left}
+.th .pv b{font:600 22px var(--pf);line-height:1}
+.th .pv span{display:flex;gap:4px;align-items:flex-end;height:18px}.th .pv span i{width:7px;border-radius:2px}
+.th[aria-pressed=true] .pv{border-color:#3b82f6}.th[aria-pressed=true]{color:var(--fg);font-weight:700}
+.wp{margin-top:10px;display:flex;align-items:center;gap:12px;width:100%;padding:10px;border-radius:14px;border:2px solid var(--line);text-align:left}
+.wp[aria-pressed=true]{border-color:#3b82f6}
+.wp .thumb{width:84px;height:48px;border-radius:9px;background:linear-gradient(135deg,#888,#444) center/cover;flex:none}
+.wp b{display:block}.wp span{color:var(--mut);font-size:12.5px}
+.pdesc{margin-top:12px;color:var(--mut);font-size:13.5px}.pdesc b{color:var(--fg)}
+
+.veil{position:fixed;inset:0;background:rgba(5,8,14,.62);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:50;padding:20px}
+.modal{width:min(520px,100%);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}
+.modal h2{margin:0 0 6px;font-size:20px}.modal .lead{color:var(--mut);margin:0 0 14px}.modal label{display:flex;gap:10px;align-items:center;margin:14px 0 4px;cursor:pointer}.modal .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);opacity:0;background:var(--tab);border:1px solid var(--line);padding:11px 18px;border-radius:14px;font-weight:600;transition:.3s;z-index:60;display:flex;gap:10px;align-items:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<script>
+/* apply the saved theme before first paint */
+try{var _t=localStorage.getItem('pch-theme-vars');if(_t){var _v=JSON.parse(_t);for(var k in _v)document.documentElement.style.setProperty(k,_v[k]);}}catch(e){}
+</script>
+</head>
+<body>
+<div class="top">
+  <img class="logo" src="/assets/icon-64.png" alt="PC Health" width="32" height="32">
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
+  <div style="flex:1"></div>
+  <span class="pill" id="upPill"><span class="dot" id="liveDot"></span><span id="upTxt">—</span></span>
+  <button class="ib" id="refreshBtn" title="Re-run all checks" aria-label="Re-run all checks"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+  <button class="ib" id="themeBtn" title="Change theme" aria-label="Change theme" aria-haspopup="true"><span class="themebtn"><i style="background:var(--cpu)"></i><i style="background:var(--mem)"></i><i style="background:var(--disk)"></i><i style="background:var(--net)"></i></span></button>
+</div>
+
+<div class="pop hide" id="pop" role="dialog" aria-label="Theme">
+  <div class="tg" id="tg"></div>
+  <button class="wp" id="wpBtn" aria-pressed="false"><span class="thumb" id="wpThumb"></span><span><b>Match my wallpaper</b><span>Uses the colors and mood of your desktop background.</span></span></button>
+  <div class="pdesc" id="pdesc"></div>
+</div>
+
+<main id="view"></main>
+
+<div class="veil hide" id="cleanVeil" role="dialog" aria-modal="true" aria-labelledby="cleanTitle">
+  <div class="modal"><h2 id="cleanTitle">Clean up?</h2>
+    <div id="cleanBody"></div>
+    <div class="acts"><button class="btn" id="cleanNo">Cancel</button><button class="btn primary" id="cleanYes">Clean</button></div></div>
+</div>
+<div class="veil hide" id="offVeil"><div class="modal"><h2>Connection lost</h2><p class="lead">The dashboard stopped running in the background (this can happen after your laptop sleeps). Close this window and open <b>PC Health</b> again from your taskbar or desktop.</p></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const TOKEN='__TOKEN__';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(p,body){const o={headers:{'X-Token':TOKEN,'Content-Type':'application/json'}};if(body!==undefined){o.method='POST';o.body=JSON.stringify(body);}const r=await fetch(p,o);if(!r.ok)throw new Error(r.status);return r.json();}
+const setT=(id,t)=>{const e=document.getElementById(id);if(e&&e.textContent!==String(t))e.textContent=t;};
+const setH=(id,h)=>{const e=document.getElementById(id);if(e)e.innerHTML=h;};
+
+/* ================= formatting ================= */
+const fmtBytes=(b,d=1)=>{b=+b||0;const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<4){b/=1024;i++;}return (i>=3?b.toFixed(d):i>=1?b.toFixed(i===1?0:d):b.toFixed(0))+' '+u[i];};
+const rateP=b=>{b=+b||0;const u=['B/s','kB/s','MB/s','GB/s'];let i=0;while(b>=1000&&i<3){b/=1000;i++;}return {v:(b>=100||i===0?Math.round(b):b.toFixed(1)).toString(),u:u[i]};};
+const rate=b=>{const r=rateP(b);return r.v+' '+r.u;};
+const fmtDur=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;};
+const FR={chrome:'Google Chrome',msedge:'Microsoft Edge',msedgewebview2:'Edge WebView (inside apps)',svchost:'Windows background services',explorer:'File Explorer',code:'VS Code',claude:'Claude',system:'Windows System',dwm:'Desktop Window Manager',msmpeng:'Windows Defender','memory compression':'Memory Compression',searchhost:'Windows Search','wispr flow':'Wispr Flow',powershell:'PowerShell',node:'Node.js',onedrive:'OneDrive',spotify:'Spotify',slack:'Slack',zoom:'Zoom',whatsapp:'WhatsApp',winword:'Word',excel:'Excel',powerpnt:'PowerPoint',outlook:'Outlook',notion:'Notion',discord:'Discord',firefox:'Firefox'};
+const friendly=n=>FR[n.toLowerCase()]||n.replace(/[-_.]+/g,' ').replace(/^\w/,c=>c.toUpperCase());
+const cv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#888';
+
+/* ================= icons / tabs ================= */
+const IC={
+overview:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+cpu:'<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+memory:'<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11v2M10 11v2M14 11v2M18 11v2M6 17v2M18 17v2"/>',
+disk:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15h.01M11 15h6"/>',
+network:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>',
+gpu:'<path d="M12 3 3 8l9 5 9-5z"/><path d="m3 13 9 5 9-5"/>',
+neural:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+battery:'<rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2M6 10v4"/>',
+thermals:'<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/>',
+sound:'<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
+bluetooth:'<path d="m7 7 10 10-5 4V3l5 4L7 17"/>',
+security:'<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+broom:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+storage:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'};
+const ico=n=>`<svg class="ico" viewBox="0 0 24 24">${IC[n]||''}</svg>`;
+const TABS=[['overview','Overview'],['cpu','CPU'],['memory','Memory'],['disk','Disk'],['storage','Storage'],['network','Network'],['gpu','GPU'],['neural','Neural'],['battery','Battery'],['thermals','Thermals'],['sound','Sound'],['bluetooth','Bluetooth'],['security','Security']];
+const COLOR={overview:'--tabonfg',cpu:'--cpu',memory:'--mem',disk:'--disk',storage:'--disk',network:'--net',gpu:'--gpu',neural:'--npu',battery:'--bat',thermals:'--thr',sound:'--snd',bluetooth:'--bt',security:'--hl'};
+$('#tabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="false" title="${l}" style="--tc:var(${COLOR[k]})">${ico(k)}<span class="l">${l}</span></button>`).join('');
+
+/* ================= data ================= */
+const HIST=90;const Hh={cpu:[],mem:[],gpu:[],disk:[],rx:[],tx:[],bat:[],freq:[]};
+const push=(k,v)=>{Hh[k].push(v);if(Hh[k].length>HIST)Hh[k].shift();};
+let L=null,ST=null,DV=null,cur='overview',appSort='mem';
+
+/* ================= charts ================= */
+function bars(id,data,max,color,n=48){
+  const c=typeof id==='string'?document.getElementById(id):id;if(!c)return;
+  const dpr=window.devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
+  const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  const gap=Math.max(1.5,w/n*.3),bw=(w-gap*(n-1))/n,d=data.slice(-n),off=n-d.length;
+  for(let i=0;i<n;i++){
+    const v=i<off?null:d[i-off],x=i*(bw+gap),bh=v==null?2:Math.max(2,Math.min(v,max)/max*(h-2));
+    g.globalAlpha=v==null?.22:1;
+    const gr=g.createLinearGradient(0,h-bh,0,h);gr.addColorStop(0,color);gr.addColorStop(1,color+'a0');g.fillStyle=gr;
+    g.beginPath();if(g.roundRect)g.roundRect(x,h-bh,bw,bh,Math.min(2,bw/2));else g.rect(x,h-bh,bw,bh);g.fill();
+  }
+  g.globalAlpha=1;
+}
+function donut(segs,top,sub){
+  const R=44,C=2*Math.PI*R,tot=segs.reduce((a,s)=>a+Math.max(0,s.v),0)||1;let off=0;
+  const arcs=segs.filter(s=>s.v>0).map(s=>{const len=s.v/tot*C,vis=Math.max(0,len-2.5);const a=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${s.c}" stroke-width="14" stroke-dasharray="${vis.toFixed(1)} ${(C-vis).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}" transform="rotate(-90 60 60)"/>`;off+=len;return a;}).join('');
+  return `<svg viewBox="0 0 120 120" class="donut"><circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--inset)" stroke-width="14"/>${arcs}<text x="60" y="60" text-anchor="middle" class="dn">${top}</text><text x="60" y="75" text-anchor="middle" class="ds">${sub}</text></svg>`;
+}
+const legend=rows=>`<div class="legend">${rows.map(r=>`<div class="lg"><i style="background:${r.c}"></i><span>${esc(r.n)}</span><b class="num">${r.v}</b></div>`).join('')}</div>`;
+const kv=(l,id,init='–')=>`<div class="kv"><span>${l}</span><b class="num" id="${id}">${init}</b></div>`;
+
+/* ================= building blocks ================= */
+function mini(o){return `<section class="card mini c3" data-go="${o.go}" tabindex="0" role="button" aria-label="Open ${o.title}" style="--c:var(${o.c})">
+  <header><span class="chip">${ico(o.ic||o.go)}</span><b>${o.title}</b><i class="chev">›</i></header>
+  <div class="subt" id="${o.id}_s">${o.sub||'&nbsp;'}</div>
+  <div class="big num"><span id="${o.id}_v">–</span><small id="${o.id}_u">${o.unit||''}</small><em class="badge hide" id="${o.id}_b"></em></div>
+  <div class="tri">${o.tri.map((t,i)=>`<div><span>${t}</span><b class="num" id="${o.id}_t${i}">–</b></div>`).join('')}</div>
+  ${o.inset||`<div class="inset"><canvas class="bars" id="${o.id}_c"></canvas></div>`}</section>`;}
+const dcard=(cls,title,color,ic,body)=>`<section class="card ${cls}" style="--c:var(${color})"><header><span class="chip">${ico(ic)}</span><b>${title}</b></header>${body}</section>`;
+function appRows(list,key,color){
+  const max=Math.max(1,...list.map(a=>a[key]));
+  return list.map(a=>`<div class="app" style="--c:var(${color})"><img src="/icon/${encodeURIComponent(a.name)}?t=${TOKEN}" alt="" onerror="this.outerHTML='<div class=&quot;av&quot;>${esc((friendly(a.name)[0]||'?').toUpperCase())}</div>'">
+    <div style="min-width:0"><div class="nm" title="${esc(a.name)}">${esc(friendly(a.name))}${a.count>1?` <span class="note">×${a.count}</span>`:''}</div><div class="meter"><i style="width:${a[key]/max*100}%"></i></div></div>
+    <div class="m num">${key==='mem'?fmtBytes(a.mem):a.cpu.toFixed(a.cpu<10?1:0)+'%'}</div><div class="c num">${key==='mem'?a.cpu.toFixed(1)+'%':fmtBytes(a.mem)}</div></div>`).join('');
+}
+const sortApps=(key)=>[...(L?L.apps:[])].sort((a,b)=>key==='mem'?b.mem-a.mem:b.cpu-a.cpu||b.mem-a.mem);
+const memStatus=p=>p>=92?['Very full','bad']:p>=85?['Getting full','warn']:['Normal',''];
+const setBadge=(id,[t,cls])=>{const e=document.getElementById(id);if(e){e.textContent=t;e.className='badge '+cls;}};
+
+/* ================= views ================= */
+const V={};
+
+V.overview={
+ html:()=>`
+ ${mini({id:'o_cpu',go:'cpu',c:'--cpu',title:'CPU',sub:'Now',unit:'%',tri:['User','System','Average']})}
+ ${mini({id:'o_mem',go:'memory',c:'--mem',title:'Memory',sub:'In use',unit:' GB',tri:['Apps','Compressed','Cached']})}
+ ${mini({id:'o_gpu',go:'gpu',c:'--gpu',title:'GPU',sub:'Graphics',unit:'%',tri:['Memory','Average','Peak']})}
+ ${mini({id:'o_disk',go:'disk',c:'--disk',title:'Disk',sub:'Free',unit:'',tri:['Reading','Writing','Written']})}
+ ${mini({id:'o_net',go:'network',c:'--net',title:'Network',sub:'Downloading',unit:'',tri:['Uploading','Downloaded','Uploaded']})}
+ ${mini({id:'o_bat',go:'battery',c:'--bat',title:'Battery',sub:'',unit:'%',tri:['Remaining','Power draw','Health']})}
+ ${mini({id:'o_npu',go:'neural',c:'--npu',title:'Neural Engine',sub:'AI chip',unit:'',tri:['Status','Type','Activity'],inset:'<div class="inset"><div class="note" id="o_npu_n" style="height:44px;display:flex;align-items:center">Windows reports whether the chip is ready, not how busy it is.</div></div>'})}
+ ${mini({id:'o_hl',go:'security',c:'--hl',ic:'security',title:'Health',sub:'Overall score',unit:'/100',tri:['Protection','To do','Last scan'],inset:'<div class="inset"><div id="o_hl_p" style="display:flex;gap:6px;flex-wrap:wrap;min-height:44px;align-items:center"></div></div>'})}
+ ${dcard('c4','Memory by Type','--mem','memory','<div class="donutbox" id="d_type"></div>')}
+ ${dcard('c4','Memory by App','--mem','overview','<div class="donutbox" id="d_mapp"></div>')}
+ ${dcard('c4','CPU by App','--cpu','cpu','<div class="donutbox" id="d_capp"></div>')}`,
+ update(){
+  if(!L)return;const c=L.cpu,m=L.mem,g=L.gpu,d=L.disk,n=L.net,b=L.battery,mt=L.memTypes;
+  setT('o_cpu_v',c.pct);setT('o_cpu_t0',c.user+'%');setT('o_cpu_t1',c.system+'%');setT('o_cpu_t2',c.avg+'%');bars('o_cpu_c',Hh.cpu,100,cv('--cpu'));
+  setT('o_mem_s','In use of '+m.totalGB+' GB');setT('o_mem_v',m.usedGB.toFixed(1));setBadge('o_mem_b',memStatus(m.pct));
+  setT('o_mem_t0',mt.appsGB.toFixed(1)+' GB');setT('o_mem_t1',mt.compressedGB.toFixed(1)+' GB');setT('o_mem_t2',mt.cachedGB.toFixed(1)+' GB');bars('o_mem_c',Hh.mem,100,cv('--mem'));
+  if(g&&g.ok){setT('o_gpu_s',(g.name||'').replace(/\(R\)|\(TM\)/g,''));setT('o_gpu_v',g.util);setT('o_gpu_t0',(g.memMB/1024).toFixed(2)+' GB');setT('o_gpu_t1',avg(Hh.gpu)+'%');setT('o_gpu_t2',Math.max(0,...Hh.gpu)+'%');}
+  else{setT('o_gpu_s','Reading graphics…');}
+  bars('o_gpu_c',Hh.gpu,100,cv('--gpu'));
+  {const lim=limitGB(),below=lim>0&&d.free/1073741824<lim,se=document.getElementById('o_disk_s');setT('o_disk_s',below?'Below your '+lim+' GB limit':'Free of '+fmtBytes(d.total,0)+' on '+d.drive);if(se)se.style.color=below?'var(--warn)':'';}setT('o_disk_v',(d.free/1073741824).toFixed(1));setT('o_disk_u','GB');
+  setT('o_disk_t0',rate(d.readBps));setT('o_disk_t1',rate(d.writeBps));setT('o_disk_t2',fmtBytes(d.writeSince));bars('o_disk_c',Hh.disk,Math.max(1e6,...Hh.disk),cv('--disk'));
+  const r=rateP(n.rxBps);setT('o_net_v',r.v);setT('o_net_u',r.u);setT('o_net_t0',rate(n.txBps));setT('o_net_t1',fmtBytes(n.sessRx));setT('o_net_t2',fmtBytes(n.sessTx));bars('o_net_c',Hh.rx,Math.max(1e5,...Hh.rx),cv('--net'));
+  if(b){setT('o_bat_s',b.plugged?'Plugged in':'On battery');setT('o_bat_v',b.pct);setT('o_bat_t0',b.plugged?(b.pct>=99?'Full':'Charging'):(b.minutes!=null?`${Math.floor(b.minutes/60)}h ${b.minutes%60}m`:'—'));setT('o_bat_t1',b.powerW!=null?b.powerW+' W':'—');setT('o_bat_t2',b.health?b.health.pct+'%':'—');bars('o_bat_c',Hh.bat,100,cv('--bat'));}
+  else{setT('o_bat_s','No battery found');setT('o_bat_v','—');}
+  const npu=DV&&DV.npu&&DV.npu[0];setT('o_npu_s',npu?npu.name:'Not detected');setT('o_npu_v',npu?(npu.ok?'Ready':'Off'):'—');setT('o_npu_t0',npu?(npu.ok?'OK':'Check'):'—');setT('o_npu_t1','NPU');setT('o_npu_t2','n/a');
+  if(ST&&ST.ready){setT('o_hl_v',ST.score);const todo=ST.findings.filter(f=>f.level!=='OK').length;setT('o_hl_s',ST.grade);setT('o_hl_t0',protState());setT('o_hl_t1',todo+' item'+(todo===1?'':'s'));setT('o_hl_t2',lastScanTxt());setH('o_hl_p',groupPills());}
+  else setT('o_hl_s','Checking…');
+  const ty=[{n:'Apps',v:mt.appsGB,c:cv('--cpu')},{n:'Compressed',v:mt.compressedGB,c:cv('--mem')},{n:'Cached',v:mt.cachedGB,c:cv('--disk')},{n:'Free',v:mt.freeGB,c:cv('--net')}];
+  setH('d_type',donut(ty,Math.round(m.pct)+'%','in use')+legend(ty.map(t=>({n:t.n,v:t.v.toFixed(2)+' GB',c:t.c}))));
+  const cols=[cv('--cpu'),cv('--mem'),cv('--gpu'),cv('--disk'),cv('--net')];
+  const ma=sortApps('mem').slice(0,4),tot=m.usedGB*1073741824,sum=ma.reduce((a,x)=>a+x.mem,0);
+  const mseg=ma.map((a,i)=>({n:friendly(a.name),v:a.mem,c:cols[i]})).concat([{n:'Other',v:Math.max(0,tot-sum),c:cv('--dim')}]);
+  setH('d_mapp',donut(mseg,(tot/1073741824).toFixed(1),'GB all apps')+legend(mseg.map(s=>({n:s.n,v:fmtBytes(s.v),c:s.c}))));
+  const ca=sortApps('cpu').slice(0,4),csum=ca.reduce((a,x)=>a+x.cpu,0);
+  const cseg=ca.map((a,i)=>({n:friendly(a.name),v:a.cpu,c:cols[i]})).concat([{n:'Other',v:Math.max(0,c.pct-csum),c:cv('--dim')}]);
+  setH('d_capp',donut(cseg,c.pct+'%','CPU in use')+legend(cseg.map(s=>({n:s.n,v:s.v.toFixed(1)+'%',c:s.c}))));
+ }};
+const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):0;
+function protState(){const f=(ST&&ST.findings)||[];if(f.some(x=>['Antivirus','Firewall','Threats'].includes(x.area)&&x.level==='BAD'))return 'At risk';if(f.some(x=>['Antivirus','Scans','Firewall','Threats'].includes(x.area)&&x.level==='WARN'))return 'Mostly';return 'On';}
+function lastScanTxt(){const s=ST&&ST.security&&ST.security.status;if(!s)return '—';const a=[s.QuickScanAgeDays,s.FullScanAgeDays].filter(x=>x>=0);if(!a.length)return 'Never';const d=Math.min(...a);return d===0?'Today':d===1?'Yesterday':d+'d ago';}
+const AREA_GROUP={Antivirus:'Protection',Scans:'Protection',Firewall:'Protection',Threats:'Protection',Memory:'Speed',Startup:'Speed',System:'Speed',Battery:'Speed',Storage:'Storage',Disk:'Storage',Cleanup:'Storage',Updates:'Updates'};
+function groupPills(){const rank={BAD:2,WARN:1,OK:0},g={};(ST.findings||[]).forEach(f=>{const k=AREA_GROUP[f.area]||'Other';if(!(k in g)||rank[f.level]>rank[g[k]])g[k]=f.level;});return Object.entries(g).map(([k,l])=>`<span class="pill"><span class="dot ${l==='BAD'?'bad':l==='WARN'?'warn':'ok'}"></span>${k}</span>`).join('');}
+
+/* generic detail page: big chart + stats */
+function detail(o){return `
+ ${dcard('c8',o.title,o.c,o.ic,`<div class="subt" id="${o.id}_s">${o.sub||'&nbsp;'}</div><div class="big num"><span id="${o.id}_v">–</span><small id="${o.id}_u">${o.unit||''}</small><em class="badge hide" id="${o.id}_b"></em></div><div class="inset"><canvas class="bars tall" id="${o.id}_c"></canvas></div>${o.under||''}`)}
+ ${dcard('c4','Details',o.c,'overview',`<div>${o.stats.map(([l,i])=>kv(l,i)).join('')}</div>`)}
+ ${o.extra||''}`;}
+
+V.cpu={
+ html:()=>detail({id:'cpu',c:'--cpu',ic:'cpu',title:'Processor',sub:'Busy right now',unit:'%',stats:[['Now','k_now'],['User programs','k_user'],['Windows itself','k_sys'],['Average (since opened)','k_avg'],['Peak (last 3 min)','k_peak'],['Speed','k_freq'],['Logical cores','k_cores'],['Programs running','k_procs']],
+   extra:dcard('c12','Each core','--cpu','cpu','<div class="cores" id="coreGrid"></div>')+dcard('c6','Using the most CPU','--cpu','cpu','<div id="topCpu"></div>')+dcard('c6','CPU by App','--cpu','overview','<div class="donutbox" id="d_capp"></div>')}),
+ update(){if(!L)return;const c=L.cpu;setT('cpu_v',c.pct);setT('cpu_s',c.name);bars('cpu_c',Hh.cpu,100,cv('--cpu'),HIST);
+  setT('k_now',c.pct+'%');setT('k_user',c.user+'%');setT('k_sys',c.system+'%');setT('k_avg',c.avg+'%');setT('k_peak',Math.max(0,...Hh.cpu)+'%');setT('k_freq',(c.freqMHz/1000).toFixed(2)+' GHz (base '+(c.maxMHz/1000).toFixed(1)+')');setT('k_cores',c.cores);setT('k_procs',c.procs);
+  setH('coreGrid',c.perCore.map((p,i)=>`<div class="core" title="Core ${i}: ${p}%"><em>${i}</em><i style="height:${Math.max(3,p)}%"></i></div>`).join(''));
+  setH('topCpu',appRows(sortApps('cpu').slice(0,8),'cpu','--cpu'));
+  const cols=[cv('--cpu'),cv('--mem'),cv('--gpu'),cv('--disk'),cv('--net')],ca=sortApps('cpu').slice(0,4),cs=ca.reduce((a,x)=>a+x.cpu,0);
+  const cseg=ca.map((a,i)=>({n:friendly(a.name),v:a.cpu,c:cols[i]})).concat([{n:'Other',v:Math.max(0,c.pct-cs),c:cv('--dim')}]);
+  setH('d_capp',donut(cseg,c.pct+'%','CPU in use')+legend(cseg.map(s=>({n:s.n,v:s.v.toFixed(1)+'%',c:s.c}))));}};
+
+V.memory={
+ html:()=>detail({id:'mem',c:'--mem',ic:'memory',title:'Memory',sub:'In use',unit:' GB',stats:[['In use','k_used'],['Apps','k_apps'],['Compressed','k_comp'],['Cached (reusable)','k_cache'],['Free','k_free'],['Committed','k_commit'],['Installed','k_tot']],
+   extra:dcard('c6','Memory by Type','--mem','memory','<div class="donutbox" id="d_type"></div>')+dcard('c6','Using the most memory','--mem','overview','<div id="topMem"></div>')}),
+ update(){if(!L)return;const m=L.mem,t=L.memTypes;setT('mem_s','of '+m.totalGB+' GB installed');setT('mem_v',m.usedGB.toFixed(1));setBadge('mem_b',memStatus(m.pct));bars('mem_c',Hh.mem,100,cv('--mem'),HIST);
+  setT('k_used',m.usedGB.toFixed(1)+' GB ('+m.pct+'%)');setT('k_apps',t.appsGB.toFixed(2)+' GB');setT('k_comp',t.compressedGB.toFixed(2)+' GB');setT('k_cache',t.cachedGB.toFixed(2)+' GB');setT('k_free',t.freeGB.toFixed(2)+' GB');setT('k_commit',m.commitPct+'%');setT('k_tot',m.totalGB+' GB');
+  const ty=[{n:'Apps',v:t.appsGB,c:cv('--cpu')},{n:'Compressed',v:t.compressedGB,c:cv('--mem')},{n:'Cached',v:t.cachedGB,c:cv('--disk')},{n:'Free',v:t.freeGB,c:cv('--net')}];
+  setH('d_type',donut(ty,Math.round(m.pct)+'%','in use')+legend(ty.map(x=>({n:x.n,v:x.v.toFixed(2)+' GB',c:x.c}))));
+  setH('topMem',appRows(sortApps('mem').slice(0,9),'mem','--mem'));}};
+
+V.disk={
+ html:()=>detail({id:'dsk',c:'--disk',ic:'disk',title:'Storage drive',sub:'Free space',unit:' GB',stats:[['Reading now','k_r'],['Writing now','k_w'],['Busy','k_busy'],['Read since opened','k_rs'],['Written since opened','k_ws'],['Drive health','k_hl']],
+   extra:dcard('c6','Drives','--disk','disk','<div id="vols"></div>')+dcard('c6','Drive health','--disk','disk','<div id="dhealth"></div>')+dcard('c12','Activity per drive','--disk','disk','<div class="list" id="drvAct"></div>')}),
+ update(){if(!L)return;const d=L.disk;setT('dsk_s','Free of '+fmtBytes(d.total,0)+' on '+d.drive);setT('dsk_v',(d.free/1073741824).toFixed(1));bars('dsk_c',Hh.disk,Math.max(1e6,...Hh.disk),cv('--disk'),HIST);
+  setT('k_r',rate(d.readBps));setT('k_w',rate(d.writeBps));setT('k_busy',d.busyPct+'%');setT('k_rs',fmtBytes(d.readSince));setT('k_ws',fmtBytes(d.writeSince));
+  const dk=ST&&ST.health&&ST.health.disks&&ST.health.disks[0];setT('k_hl',dk?dk.Health:'Checking…');
+  setH('vols',(d.volumes||[]).map(v=>{const used=100-v.free/v.total*100;return `<div style="padding:10px 0"><div class="kv" style="border:0;padding:0"><span><b style="color:var(--fg)">${esc(v.drive)}</b> ${esc(v.label||'')}</span><b class="num">${fmtBytes(v.free,0)} free of ${fmtBytes(v.total,0)}</b></div><div class="bar" style="--c:${used>90?'var(--bad)':used>80?'var(--warn)':'var(--disk)'}"><i style="width:${used}%"></i></div></div>`;}).join(''));
+  renderDriveHealth();renderDriveAct();}};
+
+V.storage={
+ html:()=>`${dcard('c4','Your drive','--disk','disk','<div id="sSum"></div>')}${dcard('c8','Storage map','--disk','storage','<div id="sMap"></div>')}${dcard('c12','Clean up','--net','broom','<div id="sClean"></div>')}${dcard('c12','Big files and old downloads','--disk','disk','<div id="sFiles"></div>')}`,
+ update(){renderSummary();renderCleanup();renderFiles();}};
+
+V.network={
+ html:()=>detail({id:'net',c:'--net',ic:'network',title:'Internet',sub:'Downloading',unit:'',stats:[['Downloading','k_rx'],['Uploading','k_tx'],['Downloaded since opened','k_rxs'],['Uploaded since opened','k_txs'],['Wi-Fi network','k_wifi'],['Signal','k_sig']],
+   under:'<div class="sec" style="margin-top:14px">Uploading</div><div class="inset"><canvas class="bars" id="net2_c" style="height:80px"></canvas></div>',
+   extra:dcard('c12','Connections','--net','network','<div class="list" id="adapters"><div class="note">Looking for adapters…</div></div>')}),
+ update(){if(!L)return;const n=L.net,r=rateP(n.rxBps);setT('net_v',r.v);setT('net_u',r.u);bars('net_c',Hh.rx,Math.max(1e5,...Hh.rx),cv('--net'),HIST);bars('net2_c',Hh.tx,Math.max(1e5,...Hh.tx),cv('--gpu'),HIST);
+  setT('k_rx',rate(n.rxBps));setT('k_tx',rate(n.txBps));setT('k_rxs',fmtBytes(n.sessRx));setT('k_txs',fmtBytes(n.sessTx));
+  const w=DV&&DV.wifi;setT('k_wifi',w?w.ssid:'Not on Wi-Fi');setT('k_sig',w?w.signal+'%':'—');
+  if(DV&&DV.adapters)setH('adapters',DV.adapters.length?DV.adapters.map(a=>`<div class="it"><span class="dot ok"></span><div><div class="t">${esc(a.name)}</div><div class="d">${esc(a.desc)}</div></div><b>${esc(a.speed)}</b></div>`).join(''):'<div class="note">No active connection.</div>');}};
+
+V.gpu={
+ html:()=>detail({id:'gpu',c:'--gpu',ic:'gpu',title:'Graphics',sub:'',unit:'%',stats:[['Busy now','k_u'],['Average (3 min)','k_a'],['Peak (3 min)','k_p'],['Graphics memory used','k_m'],['Driver version','k_d']],
+   extra:dcard('c12','Engines','--gpu','gpu','<div class="list" id="engines"><div class="note">Reading…</div></div>')}),
+ update(){const g=L&&L.gpu;if(!g||!g.ok){setT('gpu_s','Reading graphics…');return;}setT('gpu_s',g.name);setT('gpu_v',g.util);bars('gpu_c',Hh.gpu,100,cv('--gpu'),HIST);
+  setT('k_u',g.util+'%');setT('k_a',avg(Hh.gpu)+'%');setT('k_p',Math.max(0,...Hh.gpu)+'%');setT('k_m',(g.memMB/1024).toFixed(2)+' GB (shared with memory)');setT('k_d',g.driver||'—');
+  setH('engines',(g.engines||[]).map(e=>`<div class="it"><span class="dot ${e.util>0?'ok':''}"></span><div><div class="t">${esc(e.type==='3D'?'3D / graphics':e.type==='Compute'?'Compute / AI':e.type)}</div></div><b class="num">${e.util}%</b></div>`).join('')||'<div class="note">No engine data.</div>');}};
+
+V.neural={
+ html:()=>`${dcard('c12','Neural Engine (NPU)','--npu','neural','<div id="npuBody"></div>')}`,
+ update(){const n=DV&&DV.npu&&DV.npu[0];setH('npuBody',n?`<div class="big" style="font-size:34px">${esc(n.name)}</div><div class="subt" style="margin-top:6px">Status: <b style="color:${n.ok?'var(--ok)':'var(--bad)'}">${n.ok?'Ready':'Not working'}</b></div><p class="note" style="max-width:70ch;margin-top:14px">This laptop has a dedicated AI chip. Windows uses it for things like background blur and voice features without using the processor. <b>Windows does not report how busy this chip is</b>, so there is no live graph here — only whether it is ready.</p>`:'<div class="note">No AI chip (NPU) was found on this computer.</div>');}};
+
+V.battery={
+ html:()=>detail({id:'bat',c:'--bat',ic:'battery',title:'Battery',sub:'',unit:'%',stats:[['Status','k_st'],['Time left','k_tl'],['Power draw','k_pw'],['Voltage','k_vt'],['Charge now','k_cn'],['Battery health','k_bh'],['Charge cycles','k_cy'],['Full capacity vs new','k_cap']],
+   extra:dcard('c12','Battery health','--bat','battery','<div class="donutbox" id="d_bh"><div class="note">Reading the battery report…</div></div>')}),
+ update(){const b=L&&L.battery;if(!b){setT('bat_s','No battery found');return;}setT('bat_s',b.plugged?'Plugged in':'On battery');setT('bat_v',b.pct);bars('bat_c',Hh.bat,100,cv('--bat'),HIST);
+  setT('k_st',b.plugged?(b.pct>=99?'Fully charged':'Charging'):'Using battery');setT('k_tl',b.plugged?'—':(b.minutes!=null?`${Math.floor(b.minutes/60)}h ${b.minutes%60}m`:'Calculating…'));setT('k_pw',b.powerW!=null?b.powerW+' W '+(b.charging?'(charging)':'(using)'):'—');setT('k_vt',b.voltage!=null?b.voltage+' V':'—');setT('k_cn',b.remainingMWh!=null?(b.remainingMWh/1000).toFixed(1)+' Wh':'—');
+  const h=b.health;setT('k_bh',h?h.pct+'% of original':'Reading…');setT('k_cy',h?h.cycles:'—');setT('k_cap',h?(h.full/1000).toFixed(1)+' / '+(h.design/1000).toFixed(1)+' Wh':'—');
+  if(h)setH('d_bh',donut([{v:h.pct,c:cv('--bat')},{v:100-h.pct,c:cv('--line')}],h.pct+'%','health')+`<div class="legend"><div class="lg"><i style="background:${cv('--bat')}"></i><span>Holds today</span><b class="num">${(h.full/1000).toFixed(1)} Wh</b></div><div class="lg"><i style="background:${cv('--dim')}"></i><span>When new</span><b class="num">${(h.design/1000).toFixed(1)} Wh</b></div><p class="note">${h.pct>=80?'Battery is in good shape.':h.pct>=60?'Battery is ageing but fine for daily use.':'Battery has lost a lot of capacity — consider replacing it.'}</p></div>`);}};
+
+V.thermals={
+ html:()=>detail({id:'thr',c:'--thr',ic:'thermals',title:'Speed & heat',sub:'Processor speed',unit:' GHz',stats:[['Processor speed','k_f'],['Base speed (rated)','k_mx'],['System temperature','k_t'],['Fans found','k_fan']],
+   extra:dcard('c12','What Windows can and can\'t see','--thr','thermals','<p class="note" style="max-width:80ch" id="thrNote"></p>')}),
+ update(){if(!L)return;const c=L.cpu;setT('thr_v',(c.freqMHz/1000).toFixed(2));bars('thr_c',Hh.freq,Math.max(c.maxMHz,...Hh.freq),cv('--thr'),HIST);
+  setT('k_f',(c.freqMHz/1000).toFixed(2)+' GHz');setT('k_mx',(c.maxMHz/1000).toFixed(1)+' GHz');
+  const z=(L.thermal||[])[0];setT('k_t',z?z.c.toFixed(0)+' °C (approx.)':'Not reported');setT('k_fan',DV?DV.fans+(DV.fans?' (no speed reading)':''):'…');
+  setT('thrNote','Windows only shares a rough overall temperature, not the exact processor temperature, and it does not report fan speed on most laptops. The speed graph above is real: when the processor is working hard or getting hot it speeds up, then slows down to cool off.');}};
+
+V.sound={
+ html:()=>dcard('c12','Sound devices','--snd','sound','<div class="list" id="audio"><div class="note">Looking for devices…</div></div><p class="note">Volume and per-app sound are controlled from the speaker icon next to the clock.</p>'),
+ update(){if(DV&&DV.audio)setH('audio',DV.audio.length?DV.audio.map(a=>`<div class="it"><span class="dot ${a.ok?'ok':'bad'}"></span><div><div class="t">${esc(a.name)}</div></div><b style="color:var(--mut)">${a.ok?'Ready':'Problem'}</b></div>`).join(''):'<div class="note">No sound devices found.</div>');}};
+
+V.bluetooth={
+ html:()=>dcard('c12','Bluetooth','--bt','bluetooth','<div class="list" id="btl"><div class="note">Looking for devices…</div></div>'),
+ update(){if(!DV||!DV.bluetooth)return;setH('btl',`<div class="it"><span class="dot ${DV.btRadio?'ok':'bad'}"></span><div><div class="t">Bluetooth radio</div></div><b style="color:var(--mut)">${DV.btRadio?'On':'Off / not found'}</b></div>`+(DV.bluetooth.length?DV.bluetooth.map(a=>`<div class="it"><span class="dot ${a.ok?'ok':''}"></span><div><div class="t">${esc(a.name)}</div><div class="d">Paired device</div></div><b style="color:var(--mut)">${a.ok?'Available':'Not connected'}</b></div>`).join(''):'<div class="note" style="padding-top:12px">No paired devices.</div>'));}};
+
+V.security={
+ html:()=>`${dcard('c5','Virus protection','--hl','security','<div id="secBody"><div class="skel"></div></div>')}${dcard('c7','What to do','--hl','overview','<div id="todo"><div class="skel"></div></div>')}`,
+ update(){if(ST){renderSecurity(ST);renderTodo(ST);}}};
+
+/* ---------- security / todo / storage renderers (reused) ---------- */
+function ageTxt(d){return d<0?'never':d===0?'today':d===1?'yesterday':d+' days ago';}
+function renderSecurity(s){
+  if(!s.security)return;const st=s.security.status||{},fw=s.security.firewall||[],has=st.AntivirusEnabled!==undefined;
+  const ages=[st.QuickScanAgeDays,st.FullScanAgeDays].filter(x=>x>=0),last=ages.length?Math.min(...ages):-1;
+  const bad=s.findings.filter(f=>['Antivirus','Firewall','Threats'].includes(f.area)&&f.level==='BAD').length,warn=s.findings.filter(f=>['Antivirus','Scans','Firewall','Threats'].includes(f.area)&&f.level==='WARN').length;
+  const cls=bad?'bad':warn?'warn':'ok',title=bad?'Needs attention':warn?'Mostly protected':'You\'re protected';
+  const row=(k,v,g)=>`<div class="kv"><span>${k}</span><b style="color:${g===true?'var(--ok)':g===false?'var(--bad)':'var(--fg)'}">${v}</b></div>`;
+  const sc=s.scan||{state:'idle'};let scan;
+  if(sc.state==='running')scan=`<div class="note" style="margin-top:12px">${esc(sc.msg)}</div><div class="prog"><i></i></div>`;
+  else scan=`<div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><button class="btn sm primary" data-act="scan">Run quick scan</button>${sc.state==='done'?'<span class="note" style="color:var(--ok)">Scan finished — all clear</span>':sc.state==='error'?`<span class="note" style="color:var(--bad)">${esc(sc.msg)}</span>`:''}</div>`;
+  setH('secBody',`<div style="display:flex;gap:14px;align-items:center;margin-top:12px"><div class="shield ${cls}"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/>${cls==='ok'?'<path d="m9 12 2 2 4-4"/>':'<path d="M12 8v4M12 16h.01"/>'}</svg></div><div><div style="font:650 20px var(--fd)">${title}</div><div class="note" style="padding:0">Windows Security (Defender)</div></div></div>
+   <div style="margin-top:8px">${has?row('Virus protection',st.AntivirusEnabled?'On':'Off',!!st.AntivirusEnabled)+row('Live protection',st.RealTimeProtection?'On':'Off',!!st.RealTimeProtection)+row('Virus list updated',ageTxt(st.SignatureAgeDays),st.SignatureAgeDays<=3)+row('Last scan',ageTxt(last),null):row('Antivirus','Managed by another app',null)}${row('Firewall',fw.length&&fw.every(f=>f.Enabled)?'On':'Check needed',fw.length?fw.every(f=>f.Enabled):null)}${row('Threats found',s.security.threatCount?s.security.threatCount:'None',s.security.threatCount===0)}</div>${scan}`);
+}
+const LV=l=>l==='BAD'?'bad':l==='WARN'?'warn':'ok';
+function renderTodo(s){
+  if(!s.ready){setH('todo','<div class="note">Still checking your PC… this takes about a minute.</div>');return;}
+  const items=s.findings.filter(f=>f.level!=='OK');
+  const head=`<div style="display:flex;align-items:center;gap:14px;margin:8px 0 6px"><div style="font:700 44px var(--fd);color:${s.score>=90?'var(--ok)':s.score>=75?'#8fd14f':s.score>=55?'var(--warn)':'var(--bad)'}" class="num">${s.score}</div><div><div style="font-weight:650">${esc(s.grade)}</div><div class="note" style="padding:0">health score out of 100</div></div></div>`;
+  setH('todo',head+(items.length?`<div class="list">`+items.map(f=>{let act='';if(f.area==='Scans'||(f.area==='Antivirus'&&/old|definitions/i.test(f.message)))act='<button class="btn sm" data-act="scan">Run scan</button>';else if(f.area==='Cleanup')act='<button class="btn sm" data-act="gostorage">Open Storage</button>';
+    return `<div class="it"><span class="dot ${LV(f.level)}"></span><div><div class="t">${esc(f.message)}</div><div class="d">${esc(f.advice)}</div></div>${act||'<span></span>'}</div>`;}).join('')+`</div>`:'<div class="note" style="color:var(--ok);font-weight:600;padding:10px 0">All clear — nothing to do right now.</div>'));
+}
+/* ---------- Storage tab: map, cleanup, drive health ---------- */
+let fileTab='large',CL=null,CLt=null,askId=null,SUMKEY='';
+const MAP={path:'',data:null,err:null,t:null,all:false};
+const KINDS={system:['Windows','--dim'],yours:['Yours','--cpu'],app:['Apps','--mem'],cache:['Safe to clear','--net'],dev:['Developer','--disk'],other:['Other','--mut']};
+const LB=(label,kind,note)=>({label,kind,note:note||''});
+function labelFor(it){
+  const p=it.path,lp=p.toLowerCase(),n=it.name,ln=n.toLowerCase(),dir=it.isDir;
+  if(!dir){
+    if(ln==='pagefile.sys')return LB('Virtual memory file','system','Windows uses it as extra memory. Leave it alone.');
+    if(ln==='hiberfil.sys')return LB('Hibernate / fast-start file','system','Lets Windows hibernate and start quickly. Leave it alone.');
+    if(ln==='swapfile.sys')return LB('App swap file','system','Used by Windows apps. Leave it alone.');
+    return LB(n,/^[a-z]:\\users\\/.test(lp)?'yours':'other','');
+  }
+  if(/^[a-z]:\\windows$/.test(lp))return LB('Windows','system','The operating system. Windows manages this.');
+  if(/^[a-z]:\\windows\\/.test(lp)){
+    const m={winsxs:['Windows component store','Updates and features. Managed by Windows. Never delete by hand.'],installer:['Windows installer cache','Needed to repair and uninstall programs.'],softwaredistribution:['Windows Update files','Windows clears old ones itself.'],system32:['Windows core files','The heart of Windows.'],syswow64:['Windows 32-bit support','Lets older apps run.'],assembly:['.NET components','Used by apps.'],fonts:['Fonts','Installed fonts.'],logs:['Windows logs','Diagnostic logs.'],temp:['Windows temporary files','Safe to clear (needs administrator).']};
+    const e=m[ln];return e?LB(e[0],ln==='temp'?'cache':'system',e[1]):LB(n,'system','Part of Windows.');}
+  if(/^[a-z]:\\program files$/.test(lp))return LB('Installed programs','app','Apps installed for everyone on this PC.');
+  if(/^[a-z]:\\program files \(x86\)$/.test(lp))return LB('Installed programs (32-bit)','app','Older 32-bit apps installed for everyone.');
+  if(/^[a-z]:\\program files( \(x86\))?\\/.test(lp))return LB(n,'app','Installed app.');
+  if(/^[a-z]:\\programdata$/.test(lp))return LB('Shared app data','app','Data that apps share between users.');
+  if(/^[a-z]:\\programdata\\/.test(lp))return LB(n,'app','App data.');
+  if(/^[a-z]:\\\$recycle\.bin$/.test(lp))return LB('Recycle Bin','yours','Deleted files waiting to be removed. Empty it from Clean up below.');
+  if(/^[a-z]:\\drivers$/.test(lp))return LB('Driver packages','system','Manufacturer driver files.');
+  if(/^[a-z]:\\users$/.test(lp))return LB('User accounts','yours','Everyone who signs in to this PC.');
+  const um=lp.match(/^[a-z]:\\users\\([^\\]+)(?:\\(.*))?$/);
+  if(um){const rest=um[2]||'';
+    if(!rest)return LB('Your account ('+n+')','yours','Your personal files and app settings.');
+    if(rest.indexOf('\\')<0){const y={downloads:'Downloads',documents:'Documents',desktop:'Desktop',pictures:'Pictures',videos:'Videos',music:'Music',onedrive:'OneDrive (copies on this PC)'};
+      if(y[ln])return LB(y[ln],'yours','Your own files.');
+      if(ln==='appdata')return LB('App settings and data','app','Apps keep settings and caches here.');
+      if(n[0]==='.')return LB(n,'dev','Developer or tool data in your account.');
+      return LB(n,'yours','');}
+    if(rest==='appdata\\local')return LB('App data (this PC)','app','Local app data and caches.');
+    if(rest==='appdata\\roaming')return LB('App settings','app','Settings that follow your account.');
+    if(rest==='appdata\\local\\temp')return LB('Temporary files','cache','Safe to clear.');
+    if(rest==='appdata\\local\\packages')return LB('Microsoft Store apps','app','Data for Store apps.');
+    if(rest==='appdata\\local\\programs')return LB('Apps installed for you','app','Apps installed just for your account.');
+  }
+  if(ln==='node_modules')return LB('node_modules','dev','Developer packages. npm install brings them back.');
+  if(/^(cache|code cache|gpucache|cachedata|crashdumps|npm-cache|temp|tmp)$/.test(ln))return LB(n,'cache','Cache. Apps rebuild it.');
+  if(n[0]==='.'&&um)return LB(n,'dev','Developer or tool data.');
+  return LB(n,'other','');
+}
+const _hc={};
+function setHIf(id,h){const e=document.getElementById(id);if(!e||_hc[id]===h)return;e.innerHTML=h;_hc[id]=h;}
+const limitGB=()=>{try{const v=parseFloat(localStorage.getItem('pch-limit-gb'));return isFinite(v)?v:50;}catch(e){return 50;}};
+
+function renderSummary(){
+  if(!document.getElementById('sSum')||!L)return;if(document.activeElement&&document.activeElement.id==='limitIn')return;
+  const d=L.disk,used=d.total-d.free,pct=Math.round(used/d.total*100),dh=(ST&&ST.driveHealth&&ST.driveHealth[0])||null,tr=ST&&ST.trend,lim=limitGB(),below=lim>0&&d.free/1073741824<lim;
+  const key=[Math.round(d.free/2e8),dh&&dh.health,tr&&tr.samples,tr&&tr.daysLeft,lim,themeName].join('|');if(key===SUMKEY)return;SUMKEY=key;
+  let trTxt='Checking…';
+  if(tr)trTxt=tr.ready?(tr.daysLeft?`At this pace the drive will be full in about <b>${tr.daysLeft} days</b> (filling by roughly ${fmtBytes(Math.abs(tr.perDay))} a day).`:'Free space is steady. No sign of it filling up.'):`Collecting data (${tr.samples} day${tr.samples===1?'':'s'} so far). An estimate appears after 3 days of use.`;
+  setH('sSum',`<div class="donutbox">${donut([{v:used,c:cv('--disk')},{v:d.free,c:cv('--inset')}],pct+'%','used')}<div class="legend"><div class="lg"><i style="background:${cv('--disk')}"></i><span>Used</span><b class="num">${fmtBytes(used,0)}</b></div><div class="lg"><i style="background:${cv('--dim')}"></i><span>Free</span><b class="num">${fmtBytes(d.free,0)}</b></div><div class="note" style="padding:4px 0 0">${esc(d.drive)} · ${fmtBytes(d.total,0)} total</div></div></div>
+  ${below?`<div class="warnbox">Free space is under your ${lim} GB limit.</div>`:''}
+  <div style="margin-top:12px"><div class="kv"><span>Drive</span><b>${dh?esc(dh.name):'…'}</b></div><div class="kv"><span>Health</span><b style="color:${dh&&dh.health==='Healthy'?'var(--ok)':dh?'var(--bad)':'var(--mut)'}">${dh?esc(dh.health):'…'}</b></div>${dh&&dh.wear!=null?`<div class="kv"><span>Wear</span><b>${dh.wear}%</b></div>`:''}${dh&&dh.tempC!=null?`<div class="kv"><span>Temperature</span><b>${dh.tempC} °C</b></div>`:''}${dh&&dh.hours!=null?`<div class="kv"><span>Powered on</span><b>${dh.hours.toLocaleString()} h</b></div>`:''}</div>${dh&&dh.wear==null?'<div class="note">Wear and temperature need administrator permission, so Windows hides them here.</div>':''}
+  <div class="sec" style="margin-top:14px">Is it filling up?</div><div class="note" style="padding:0;color:var(--fg)">${trTxt}</div>
+  <div class="sec" style="margin-top:14px">Warn me when free space is below</div><div style="display:flex;gap:8px;align-items:center"><input id="limitIn" class="inp num" type="number" min="0" step="5" value="${lim}" aria-label="Warn me below this many GB free"><span class="note">GB</span></div>`);
+}
+
+async function fetchMap(refresh){
+  clearTimeout(MAP.t);const want=MAP.path;
+  try{const r=await api('/api/map',{path:want,refresh:!!refresh});if(cur!=='storage')return;
+    if(r.state==='error'){MAP.data=null;MAP.err=r.msg;renderMap();return;}
+    if(!want)MAP.path=r.path;else if(r.path.toLowerCase()!==want.toLowerCase())return;
+    MAP.data=r;MAP.err=null;renderMap();
+    if(r.state==='running'||r.state==='busy')MAP.t=setTimeout(fetchMap,r.state==='busy'?2500:1100);
+  }catch(e){MAP.t=setTimeout(fetchMap,3000);}
+}
+function mapGo(p,refresh){MAP.path=p;MAP.data=null;MAP.all=false;MAP.err=null;renderMap();fetchMap(refresh);}
+function renderMap(){
+  if(!document.getElementById('sMap'))return;
+  if(MAP.err){setHIf('sMap',`<div class="note">${esc(MAP.err)}</div>`);return;}
+  const d=MAP.data;if(!d){setHIf('sMap','<div class="skel" style="height:260px"></div><div class="note">Measuring your drive… folders appear as soon as they are counted.</div>');return;}
+  const items=[...d.items].sort((a,b)=>(a.pending?1:0)-(b.pending?1:0)||b.bytes-a.bytes),done=items.filter(i=>!i.pending),pend=items.length-done.length;
+  const total=done.reduce((a,i)=>a+i.bytes,0),max=Math.max(1,...done.map(i=>i.bytes)),isRoot=/^[a-z]:\\?$/i.test(d.path),used=L?L.disk.total-L.disk.free:0;
+  const segs=d.path.replace(/\\$/,'').split('\\');let acc='';
+  const crumbs=segs.map((s,i)=>{acc+=(i?'\\':'')+s;const full=i===0?s+'\\':acc;return `<button class="crumb" data-map="${esc(full)}">${esc(i===0?'This drive ('+s+')':s)}</button>`;}).join('<i class="sepc">›</i>');
+  const row=it=>{const lb=labelFor(it),[kn,kc]=KINDS[lb.kind],w=it.pending?0:Math.max(1.5,it.bytes/max*100);
+    return `<div class="mrow ${it.isDir?'dir':''}" ${it.isDir?`data-map="${esc(it.path)}" tabindex="0" role="button"`:''}><div class="mn"><span class="kind" style="--k:var(${kc})">${kn}</span><div style="min-width:0"><b title="${esc(it.path)}">${esc(lb.label)}${it.isDir?'<i class="chev2">›</i>':''}</b><span class="sm">${esc(lb.note)}</span></div></div><div class="mb"><i style="width:${w}%;background:var(${kc})"></i></div><b class="num msz">${it.pending?'<span class="meas">measuring…</span>':fmtBytes(it.bytes)}</b><button class="btn sm" data-reveal="${esc(it.path)}">Show</button></div>`;};
+  const show=MAP.all?items:items.slice(0,12);
+  let hidden=items.slice(12).reduce((a,i)=>a+(i.pending?0:i.bytes),0),extra='';
+  if(isRoot&&!pend&&used>total+1e9)extra=`<div class="mrow"><div class="mn"><span class="kind" style="--k:var(--dim)">Windows</span><div style="min-width:0"><b>Protected Windows areas</b><span class="sm">Folders only Windows or an administrator can read.</span></div></div><div class="mb"><i style="width:${Math.max(1.5,(used-total)/max*100)}%;background:var(--dim)"></i></div><b class="num msz">${fmtBytes(used-total)}</b><span></span></div>`;
+  const kinds=Object.values(KINDS).map(([n,c])=>`<span class="kind" style="--k:var(${c});min-width:0">${n}</span>`).join('');
+  setHIf('sMap',`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="crumbs">${crumbs}</div><button class="btn sm" data-act="remap" style="margin-left:auto">Re-measure</button></div>
+   <div class="note" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 2px 6px"><span>${pend?`Measuring… ${done.length} of ${items.length} items done`:`${items.length} items · ${fmtBytes(total)} counted`}</span><span class="kinds">${kinds}</span></div>
+   ${show.map(row).join('')}${extra}${items.length>12?`<button class="btn sm" data-act="maptoggle" style="margin-top:8px">${MAP.all?'Show fewer':`Show all ${items.length} (${fmtBytes(hidden)} more)`}</button>`:''}`);
+}
+
+async function fetchCleanup(){
+  clearTimeout(CLt);
+  try{const r=await api('/api/cleanup');if(r.pending){CL=null;renderCleanup();CLt=setTimeout(()=>{if(cur==='storage')fetchCleanup();},2000);return;}CL=r;renderCleanup();}
+  catch(e){CLt=setTimeout(()=>{if(cur==='storage')fetchCleanup();},3000);}
+}
+const RISK={safe:'Safe',recreatable:'Rebuilds itself',permanent:'Can\'t be undone'};
+function renderCleanup(){
+  if(!document.getElementById('sClean'))return;
+  if(!CL){setHIf('sClean','<div class="skel"></div><div class="note">Looking for things that are safe to clean up…</div>');return;}
+  const run=ST&&ST.clean&&ST.clean.state==='running',rid=run?ST.clean.id:null;
+  const btn=(id,needsAdmin)=>`<button class="btn sm" data-clean="${id}" ${run||needsAdmin?'disabled':''}>${rid===id?'Cleaning…':needsAdmin?'Needs admin':'Clean'}</button>`;
+  const items=CL.items.map(i=>`<div class="crow"><div style="min-width:0"><b>${esc(i.name)}</b><span class="rk ${i.risk}">${RISK[i.risk]}</span><div class="d">${esc(i.what)} <i>If removed: ${esc(i.ifGone)}</i></div></div><b class="num">${i.needsAdmin?'—':fmtBytes(i.bytes)}</b>${btn(i.id,i.needsAdmin)}</div>`).join('');
+  const nm=CL.nm.filter(n=>n.bytes>=5e6).map((n,idx)=>{const parent=n.path.replace(/\\node_modules$/,''),proj=parent.split('\\').pop();return `<div class="crow"><div style="min-width:0"><b>${esc(proj)}</b><span class="rk recreatable">Rebuilds with npm install</span><div class="d" title="${esc(parent)}">${esc(parent)} <i>· last worked on ${n.days} days ago</i></div></div><b class="num">${fmtBytes(n.bytes)}</b>${btn('nm:'+CL.nm.indexOf(n),false)}</div>`;}).join('');
+  const sum=CL.items.filter(i=>!i.needsAdmin&&i.risk!=='permanent').reduce((a,i)=>a+i.bytes,0);
+  setHIf('sClean',`<div class="note" style="padding:0 0 4px">Each item is cleaned on its own, after you confirm. There is no "clean everything" button. Anything that belongs to Windows is left alone.</div>
+   ${items?`<div class="sec" style="margin-top:8px">Caches and leftovers · up to ${fmtBytes(sum)}</div>${items}`:'<div class="note">Nothing worth cleaning right now.</div>'}
+   ${nm?`<div class="sec" style="margin-top:16px">Old developer packages (node_modules)</div>${nm}`:''}`);
+}
+function askClean(id){
+  let title,body,size;
+  if(id.startsWith('nm:')){const n=CL&&CL.nm[+id.slice(3)];if(!n)return;const parent=n.path.replace(/\\node_modules$/,'');size=n.bytes;title='Delete this node_modules folder?';
+    body=`<p class="lead">This holds downloaded developer packages for the project at <b>${esc(parent)}</b>. Running <b>npm install</b> in that project brings them back. Last worked on ${n.days} days ago.</p><p class="note">It is deleted permanently, not sent to the Recycle Bin.</p>`;}
+  else{const i=CL&&CL.items.find(x=>x.id===id);if(!i)return;size=i.bytes;title=`Clean ${i.name}?`;body=`<p class="lead"><b>What it is:</b> ${esc(i.what)}</p><p class="lead"><b>If you remove it:</b> ${esc(i.ifGone)}</p>`+(i.risk==='permanent'?'<p class="note" style="color:var(--bad)">This cannot be undone.</p>':'');}
+  $('#cleanTitle').textContent=title;$('#cleanBody').innerHTML=body+`<div class="kv"><span>You'll free about</span><b class="num">${fmtBytes(size)}</b></div>`;askId=id;$('#cleanVeil').classList.remove('hide');$('#cleanYes').focus();
+}
+function renderFiles(){
+  const o=ST&&ST.storage;if(!o||!document.getElementById('sFiles'))return;const list=fileTab==='large'?o.large:o.oldTop;
+  const files=(list||[]).slice(0,6).map(f=>{const p=f.Path||'',i=Math.max(p.lastIndexOf('\\'),p.lastIndexOf('/'));return `<div class="file"><div style="min-width:0"><div class="nm" title="${esc(p)}">${esc(p.slice(i+1))}</div><div class="pth" title="${esc(p)}">&lrm;${esc(p.slice(0,i))}</div></div><b class="num">${fmtBytes(f.Bytes)}</b><button class="btn sm" data-reveal="${esc(p)}">Show</button></div>`;}).join('')||'<div class="note">Nothing big found.</div>';
+  setHIf('sFiles',`<div style="display:flex;align-items:center;margin:0 0 4px;gap:10px;flex-wrap:wrap"><span class="note" style="padding:0">Your call: nothing here is deleted for you. Click Show, then delete in File Explorer.</span><span class="seg"><button data-tab2="large" aria-pressed="${fileTab==='large'}">Biggest files</button><button data-tab2="old" aria-pressed="${fileTab==='old'}">Old downloads (${fmtBytes(o.oldBytes)})</button></span></div>${files}`);
+}
+function enterStorage(){if(MAP.data&&MAP.data.state==='ready')renderMap();else fetchMap();fetchCleanup();}
+function renderDriveHealth(){const dh=(ST&&ST.driveHealth)||[];setHIf('dhealth',dh.length?dh.map(d=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="kv" style="border:0;padding:0"><span><b style="color:var(--fg)">${esc(d.name)}</b></span><b style="color:${d.health==='Healthy'?'var(--ok)':'var(--bad)'}">${esc(d.health)}</b></div><div class="note" style="padding:2px 0">${esc(d.type)} · ${esc(d.bus)} · ${fmtBytes(d.sizeBytes,0)}${d.wear!=null?' · wear '+d.wear+'%':''}${d.tempC!=null?' · '+d.tempC+' °C':''}</div></div>`).join('')+(dh[0].wear==null?'<div class="note">Wear and temperature need administrator permission.</div>':''):'<div class="note">Checking drives…</div>');}
+function renderDriveAct(){const ds=(L&&L.disk.drives)||[];setHIf('drvAct',ds.map(d=>`<div class="it"><span class="dot ${d.busy>5?'ok':''}"></span><div><div class="t">${esc(d.name)}</div><div class="d">${d.busy}% busy</div></div><b class="num" style="text-align:right">↓ ${rate(d.read)} · ↑ ${rate(d.write)}</b></div>`).join('')||'<div class="note">No per-drive data.</div>');}
+
+/* ================= routing / loops ================= */
+function go(tab){cur=tab;document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===tab));
+  Object.keys(_hc).forEach(k=>delete _hc[k]);SUMKEY='';
+  $('#view').innerHTML=V[tab].html();render();if(tab==='storage')enterStorage();try{sessionStorage.setItem('pch-tab',tab);}catch(e){}}
+function render(){try{V[cur].update();}catch(e){console.error(e);}}
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)go(b.dataset.tab);});
+
+let fails=0;
+async function tickLive(){
+  try{L=await api('/api/live');fails=0;$('#liveDot').className='dot ok';$('#offVeil').classList.add('hide');
+    push('cpu',L.cpu.pct);push('mem',L.mem.pct);push('disk',L.disk.readBps+L.disk.writeBps);push('rx',L.net.rxBps);push('tx',L.net.txBps);push('freq',L.cpu.freqMHz);if(L.gpu&&L.gpu.ok)push('gpu',L.gpu.util);if(L.battery)push('bat',L.battery.pct);
+    setT('upTxt','Up '+fmtDur(L.uptimeSec));render();}
+  catch(e){fails++;$('#liveDot').className='dot bad';if(fails>=4)$('#offVeil').classList.remove('hide');}
+  setTimeout(tickLive,2000);
+}
+let pollT,prevClean='idle';
+async function pollStatus(){
+  clearTimeout(pollT);
+  try{ST=await api('/api/status');const busy=ST.busy.health||ST.busy.security||ST.busy.storage||(ST.scan&&ST.scan.state==='running')||(ST.clean&&ST.clean.state==='running');
+    if(ST.clean&&ST.clean.state!==prevClean){if(ST.clean.state==='done'&&prevClean==='running'){toast('Freed '+fmtBytes(ST.clean.freed),'ok');CL=null;MAP.data=null;delete _hc.sClean;if(cur==='storage'){fetchCleanup();fetchMap(true);}}if(ST.clean.state==='error')toast('Cleanup stopped: '+ST.clean.msg,'bad');prevClean=ST.clean.state;}
+    $('#refreshBtn').classList.toggle('spin',!!busy);$('#refreshBtn').disabled=!!busy;render();pollT=setTimeout(pollStatus,busy?1500:8000);}
+  catch(e){pollT=setTimeout(pollStatus,3000);}
+}
+async function pollDevices(){try{const d=await api('/api/devices');if(!d.pending)DV=d;render();}catch(e){}setTimeout(pollDevices,DV?30000:4000);}
+
+/* ================= actions ================= */
+document.addEventListener('click',async e=>{
+  const g=e.target.closest('[data-go]');if(g&&!e.target.closest('button')){go(g.dataset.go);return;}
+  const t=e.target.closest('[data-act],[data-reveal],[data-tab2],[data-map],[data-clean]');if(!t)return;
+  if(t.dataset.act==='scan'){try{await api('/api/scan',{});toast('Scan started','ok');pollStatus();}catch{toast('Could not start the scan','bad');}}
+  else if(t.dataset.act==='gostorage')go('storage');
+  else if(t.dataset.act==='remap')mapGo(MAP.path,true);
+  else if(t.dataset.act==='maptoggle'){MAP.all=!MAP.all;renderMap();}
+  else if(t.dataset.clean)askClean(t.dataset.clean);
+  else if(t.dataset.map)mapGo(t.dataset.map);
+  else if(t.dataset.reveal){try{const r=await api('/api/reveal',{path:t.dataset.reveal});if(!r.ok)toast('Could not open that folder','bad');}catch{toast('Could not open that folder','bad');}}
+  else if(t.dataset.tab2){fileTab=t.dataset.tab2;delete _hc.sFiles;renderFiles();}
+  if(!e.target.closest('#pop,#themeBtn'))$('#pop').classList.add('hide');
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#cleanVeil').classList.add('hide');$('#pop').classList.add('hide');}if((e.key==='Enter'||e.key===' ')&&e.target.matches('.mini')){e.preventDefault();go(e.target.dataset.go);}});
+document.addEventListener('change',e=>{if(e.target.id==='limitIn'){const v=Math.max(0,parseFloat(e.target.value)||0);try{localStorage.setItem('pch-limit-gb',String(v));}catch(x){}SUMKEY='';e.target.blur();renderSummary();toast(v?`You'll be warned below ${v} GB free`:'Free-space warning turned off','ok');}});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('.mrow.dir')){mapGo(e.target.dataset.map);}});
+$('#cleanNo').onclick=()=>{askId=null;$('#cleanVeil').classList.add('hide');};
+$('#cleanVeil').addEventListener('click',e=>{if(e.target.id==='cleanVeil')$('#cleanVeil').classList.add('hide');});
+$('#cleanYes').onclick=async()=>{const id=askId;$('#cleanVeil').classList.add('hide');if(!id)return;try{const r=await api('/api/clean',{id});if(!r.ok)throw 0;prevClean='running';pollStatus();}catch{toast('Could not start that cleanup','bad');}};
+$('#refreshBtn').onclick=async()=>{try{await api('/api/refresh',{});toast('Re-checking…','ok');pollStatus();}catch{}};
+let toastT;function toast(msg,kind){const t=$('#toast');t.innerHTML=esc(msg);t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3600);}
+
+/* ================= themes ================= */
+const SERIF="Georgia,'Times New Roman',serif";
+const THEMES={
+ vitals:{n:'Vitals',d:'The classic: charcoal with every chart in its own color.',v:{'--bg':'#121214','--top':'#18181b','--card':'#1a1a1e','--inset':'#111113','--line':'#27272d','--fg':'#f3f4f7','--mut':'#9a9aa6','--dim':'#5f5f6b','--tab':'#1d1d22','--tabon':'#1d3a66','--tabonfg':'#7db1ff','--cpu':'#3b82f6','--mem':'#8f7cf5','--gpu':'#ec4899','--disk':'#f59e0b','--net':'#22c55e','--bat':'#22c55e','--npu':'#8b5cf6','--hl':'#14b8a6'}},
+ terminal:{n:'Terminal',d:'Black screen, green phosphor. Hacker movie energy.',v:{'--bg':'#020a05','--top':'#041008','--card':'#07140b','--inset':'#030c06','--line':'#0f2a17','--fg':'#3dff94','--mut':'#27b866','--dim':'#16703d','--tab':'#082012','--tabon':'#0e3a20','--tabonfg':'#3dff94','--cpu':'#2dff8c','--mem':'#19d9c4','--gpu':'#c6ff3d','--disk':'#7be8ff','--net':'#4dff6b','--bat':'#9dff4d','--npu':'#37e0a8','--hl':'#2dff8c'}},
+ amber:{n:'Amber',d:'Warm amber on near-black, like an old monitor.',v:{'--bg':'#0c0903','--top':'#120d05','--card':'#171108','--inset':'#0d0904','--line':'#2d2210','--fg':'#ffbf1f','--mut':'#c48d17','--dim':'#7d5a10','--tab':'#1d1608','--tabon':'#3a2a0a','--tabonfg':'#ffc93d','--cpu':'#ffb81c','--mem':'#ff8040','--gpu':'#ffd94d','--disk':'#ff9a1f','--net':'#8fd9c6','--bat':'#b5e35a','--npu':'#ffa86b','--hl':'#ffc93d'}},
+ midnight:{n:'Midnight',d:'Deep navy with cool blues and violet.',v:{'--bg':'#050914','--top':'#080e1f','--card':'#0c1429','--inset':'#070c1b','--line':'#18223f','--fg':'#e6ecff','--mut':'#8b9bc9','--dim':'#4d5b88','--tab':'#0e1731','--tabon':'#1a2c5e','--tabonfg':'#8db4ff','--cpu':'#6aa0ff','--mem':'#a08cff','--gpu':'#4fd8d0','--disk':'#7fb1ff','--net':'#5ee0a0','--bat':'#5ee0a0','--npu':'#b69cff','--hl':'#4fd8d0'}},
+ plum:{n:'Plum',d:'Dusky purple with soft pink and lilac.',v:{'--bg':'#120912','--top':'#190d1a','--card':'#201121','--inset':'#150a16','--line':'#341a36','--fg':'#f6e8f8','--mut':'#b392b8','--dim':'#74517a','--tab':'#251227','--tabon':'#46224a','--tabonfg':'#f0a6ff','--cpu':'#d79df5','--mem':'#f58ac6','--gpu':'#ffb27a','--disk':'#a9d4ff','--net':'#8be0c1','--bat':'#8be0c1','--npu':'#c29bff','--hl':'#f58ac6'}},
+ neon:{n:'Neon',d:'Electric indigo with yellow and cyan highlights.',v:{'--bg':'#231f5c','--top':'#2a2569','--card':'#312b7a','--inset':'#262166','--line':'#433c96','--fg':'#ffe033','--mut':'#cfc7ff','--dim':'#8f86d9','--tab':'#352f84','--tabon':'#4a42b3','--tabonfg':'#ffe033','--cpu':'#ffe033','--mem':'#ff9f1a','--gpu':'#c75bff','--disk':'#ff7a3d','--net':'#7ff2ff','--bat':'#7dff9b','--npu':'#e08bff','--hl':'#7ff2ff'}},
+ champagne:{n:'Champagne',d:'Dark mocha with gold and rose, in a serif.',f:SERIF,v:{'--bg':'#14110c','--top':'#1a160f','--card':'#201b13','--inset':'#15120c','--line':'#352d1f','--fg':'#ecdcb0','--mut':'#b29f73','--dim':'#74663f','--tab':'#251f15','--tabon':'#4a3d22','--tabonfg':'#f0d896','--cpu':'#e6cd92','--mem':'#d89c9c','--gpu':'#c9a14a','--disk':'#b8873a','--net':'#8fb8a8','--bat':'#a8c48f','--npu':'#c7a2d0','--hl':'#e6cd92','--fd':SERIF}},
+ paper:{n:'Paper',d:'Light cream with ink-navy, calm and printed.',f:SERIF,v:{'--bg':'#f3eee2','--top':'#f8f4ea','--card':'#fbf8f0','--inset':'#efe9da','--line':'#ddd4bf','--fg':'#1f3a5f','--mut':'#6b7a8f','--dim':'#a39b86','--tab':'#ebe4d2','--tabon':'#d9e1ee','--tabonfg':'#1f3a5f','--cpu':'#1f3a5f','--mem':'#6b4a8f','--gpu':'#b5445a','--disk':'#a8741a','--net':'#2d6a5b','--bat':'#3f7d3a','--npu':'#7a56a8','--hl':'#2d6a5b','--ok':'#2f7d4f','--warn':'#b0730d','--bad':'#b8343a','--fd':SERIF}}
+};
+let themeName='vitals',lastWp=0;
+const ALLVARS=['--bg','--top','--card','--inset','--line','--fg','--mut','--dim','--tab','--tabon','--tabonfg','--cpu','--mem','--gpu','--disk','--net','--bat','--npu','--hl','--ok','--warn','--bad','--fd','--blur','--bgimg','--shadow'];
+function applyVars(v,name){const r=document.documentElement.style;ALLVARS.forEach(k=>r.removeProperty(k));for(const k in v)r.setProperty(k,v[k]);themeName=name;
+  try{localStorage.setItem('pch-theme',name);localStorage.setItem('pch-theme-vars',JSON.stringify(v));}catch(e){}
+  document.querySelectorAll('.th').forEach(b=>b.setAttribute('aria-pressed',b.dataset.th===name));$('#wpBtn').setAttribute('aria-pressed',name==='wallpaper');
+  const d=name==='wallpaper'?{n:'Match my wallpaper',d:'Colors pulled from your desktop background, with the picture softly behind the cards.'}:THEMES[name];$('#pdesc').innerHTML=`<b>${d.n}</b> · ${d.d}`;render();}
+function setTheme(name){if(name==='wallpaper')return setWallpaperTheme();applyVars(THEMES[name].v,name);}
+$('#tg').innerHTML=Object.entries(THEMES).map(([k,t])=>{const v=t.v,pf=t.f||"'Segoe UI',sans-serif";return `<button class="th" data-th="${k}" aria-pressed="false" style="--pf:${pf}"><span class="pv" style="background:${v['--card']};color:${v['--fg']}"><b>19</b><span>${['--cpu','--mem','--disk','--net'].map((c,i)=>`<i style="background:${v[c]};height:${[14,9,16,7][i]}px"></i>`).join('')}</span></span>${t.n}</button>`;}).join('');
+$('#tg').addEventListener('click',e=>{const b=e.target.closest('.th');if(b)setTheme(b.dataset.th);});
+$('#wpBtn').onclick=()=>setTheme('wallpaper');
+$('#themeBtn').onclick=e=>{e.stopPropagation();$('#pop').classList.toggle('hide');};
+$('#pop').addEventListener('click',e=>e.stopPropagation());
+
+/* ----- wallpaper theme ----- */
+const hex=(r,g,b)=>'#'+[r,g,b].map(x=>Math.round(Math.max(0,Math.min(255,x))).toString(16).padStart(2,'0')).join('');
+function hsl2hex(h,s,l){h=((h%360)+360)%360;s/=100;l/=100;const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return hex(f(0)*255,f(8)*255,f(4)*255);}
+function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2;let h=0,s=0;if(mx!==mn){const d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h*=60;}return [h,s*100,l*100];}
+async function wallpaperTheme(){
+  const img=new Image();img.src='/wallpaper?t='+TOKEN+'&v='+Date.now();await img.decode();
+  const W=64,Hh2=36,c=document.createElement('canvas');c.width=W;c.height=Hh2;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0,W,Hh2);const d=g.getImageData(0,0,W,Hh2).data;
+  let R=0,G=0,B=0,n=0;const buckets=Array.from({length:12},()=>({w:0,h:0,s:0,l:0,n:0}));
+  for(let i=0;i<d.length;i+=4){R+=d[i];G+=d[i+1];B+=d[i+2];n++;const [h,s,l]=rgb2hsl(d[i],d[i+1],d[i+2]);if(s<14||l<12||l>92)continue;const b=buckets[Math.floor(h/30)%12],w=(s/100)*(1-Math.abs(l-50)/60);b.w+=w;b.h+=h*w;b.s+=s*w;b.l+=l*w;b.n++;}
+  const [H0,S0,L0]=rgb2hsl(R/n,G/n,B/n),light=L0>58;
+  const top=buckets.filter(b=>b.w>0).sort((a,b)=>b.w-a.w).slice(0,4).map(b=>b.h/b.w);
+  const base=top.length?top:[H0,H0+40,H0+80,H0+120];while(base.length<4)base.push(base[base.length-1]+35);
+  const sat=Math.max(48,Math.min(80,S0+35)),lum=light?38:64;
+  const a=base.map(h=>hsl2hex(h,sat,lum));const more=[hsl2hex(base[0]+28,sat,lum),hsl2hex(base[1]-28,sat,lum),hsl2hex(base[2]+28,sat,lum),hsl2hex(base[3]-28,sat,lum)];
+  const hb=H0;
+  const v=light?{'--bg':hsl2hex(hb,22,90),'--top':'rgba(255,255,255,.55)','--card':'rgba(255,255,255,.62)','--inset':'rgba(255,255,255,.55)','--line':'rgba(0,0,0,.09)','--fg':hsl2hex(hb,30,14),'--mut':hsl2hex(hb,15,36),'--dim':hsl2hex(hb,10,56),'--tab':'rgba(255,255,255,.55)','--tabon':hsl2hex(base[0],45,88),'--tabonfg':hsl2hex(base[0],55,30),'--ok':'#1f8a55','--warn':'#b0730d','--bad':'#c23a3a','--bgimg':'linear-gradient(rgba(250,246,238,.55),rgba(250,246,238,.7)),url(/wallpaper?t='+TOKEN+'&v='+Date.now()+')'}
+   :{'--bg':hsl2hex(hb,30,7),'--top':'rgba(10,10,14,.55)','--card':'rgba(18,18,24,.58)','--inset':'rgba(0,0,0,.35)','--line':'rgba(255,255,255,.1)','--fg':'#f4f5f8','--mut':'#b4b8c4','--dim':'#7b8090','--tab':'rgba(255,255,255,.07)','--tabon':hsl2hex(base[0],40,24),'--tabonfg':hsl2hex(base[0],80,74),'--bgimg':'linear-gradient(rgba(6,6,10,.55),rgba(6,6,10,.72)),url(/wallpaper?t='+TOKEN+'&v='+Date.now()+')'};
+  Object.assign(v,{'--cpu':a[0],'--mem':a[1],'--gpu':a[2],'--disk':a[3],'--net':more[0],'--bat':more[1],'--npu':more[2],'--hl':more[3],'--blur':'18px','--shadow':'0 8px 30px -12px rgba(0,0,0,.35)'});
+  if(light)v['--fd']=SERIF;return {v,img:img.src};
+}
+async function setWallpaperTheme(){try{const {v,img}=await wallpaperTheme();applyVars(v,'wallpaper');$('#wpThumb').style.backgroundImage=`url(${img})`;lastWp=Date.now();}catch(e){toast("Couldn't read your wallpaper — using Vitals","bad");applyVars(THEMES.vitals.v,'vitals');}}
+window.addEventListener('focus',()=>{if(themeName==='wallpaper'&&Date.now()-lastWp>60000)setWallpaperTheme();});
+window.addEventListener('resize',()=>render());
+
+/* ================= start ================= */
+(function init(){
+  let saved='vitals';try{saved=localStorage.getItem('pch-theme')||'vitals';}catch(e){}
+  if(saved==='wallpaper')setWallpaperTheme();else if(THEMES[saved])setTheme(saved);else setTheme('vitals');
+  let t='overview';try{t=sessionStorage.getItem('pch-tab')||'overview';}catch(e){}
+  const hp=new URLSearchParams(location.hash.slice(1));   // optional deep link, e.g. #tab=storage&theme=paper
+  if(hp.get('theme')&&THEMES[hp.get('theme')])setTheme(hp.get('theme'));
+  if(hp.get('tab'))t=hp.get('tab');
+  go(V[t]?t:'overview');
+  tickLive();pollStatus();pollDevices();
+})();
+</script>
+</body>
+</html>
